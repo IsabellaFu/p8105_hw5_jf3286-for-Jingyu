@@ -28,11 +28,6 @@ scale_fill_discrete = scale_fill_viridis_d
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
 
-problem set:
-1. function + map
-2.iteration
-3. simulation
-
 # Problem 1
 read in the data
 ```{r}
@@ -78,7 +73,7 @@ prob2_data = prob2_data %>% mutate (
   id = c("control_1","control_2","control_3","control_4","control_5","control_6","control_7","control_8","control_9","control_10","experimental_1","experimental_2","experimental_3","experimental_4","experimental_5","experimental_6","experimental_7","experimental_8","experimental_9","experimental_10")
 ) %>% 
   select(id, everything()) %>% 
-  separate(id, into = c("gro", "id")) 
+  separate(id, into = c("Group", "ID")) 
 
 ```
 
@@ -91,8 +86,8 @@ pivot_longer(
              names_prefix = "week_",
              values_to = "observation"
              ) %>% 
-  group_by(group, id) %>% 
-  ggplot(aes(x = week, y = observation, group = id,color = gro)) +
+  group_by(Group, ID) %>% 
+  ggplot(aes(x = week, y = observation, group = ID,color = Group)) +
   geom_path() + 
   labs(
     title = "Observation plot",
@@ -101,11 +96,10 @@ pivot_longer(
     caption = "Observations on each subject over time"
     ) + 
   viridis::scale_color_viridis(
-    discrete = TRUE) + 
-  theme(legend.position = "none")
+    discrete = TRUE) 
 ```
 Comment:
-####### how to know which line is which #########seperat enad overlay
+Experimental group has larger slope, which means its obervations change faster as time goes by. On the contrary, control group has lower slope and slower change through the weeks. Overall, the observations of experimental group are rising through the time, but there are many observations in control group that are generally decreasing along the time. COmparing between two groups we can find out that experimental group has a increasing trend and faster change in observations.
 
 # problem 3
 Generate 10000 datasets from the model,Repeat the above for β1={1,2,3,4,5,6}
@@ -131,48 +125,51 @@ sim_regression = function(n = 30, beta0 = 2, beta1 = 0) {
 n_list = tibble(
   beta_n = c(0,1,2,3,4,5,6)) %>% 
   mutate(
-   value = map(beta_n, ~rerun(1000, sim_regression( beta1 = beta_n)))
-  ) 
+   value = map(.x = beta_n, ~rerun(500, sim_regression( beta1 =.x))))
+   
 
  
 n_list = n_list %>% 
   unnest()
 ```
 
-Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of β2 on the x axis. Describe the association between effect size and power.
+Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of β2 on the x axis. 
 ```{r}
 proportion = n_list %>% 
   group_by(beta_n) %>% 
   summarise(
-   proportion = mean(p_value<0.05)/n()
+   proportion = mean( p_value < 0.05 )/n()
     )
 
 proportion %>% 
 ggplot(aes(x = beta_n, y = proportion)) + 
   geom_point() + 
   geom_line()+
-  labs(title = "Number of items ordered in each aisle") +
+  labs(title = "Effect size and power plot",
+    x = "Effect size",
+    y = "Power",
+    caption = "The assocaition bewteen effect size and power") +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
 ```
 Describe the association:
+Power increases as effect size increases. The slope (increasing speed) is highest among effect size 2,3,4,5, and the incrasing speed (slope) slows down a bit when effect size increases from 5 to 6. 
 
 
 
-
-Make a plot showing the average estimate of β^1 on the y axis and the true value of β1 on the x axis. Make a second plot (or overlay on the first) the average estimate of β^1 only in samples for which the null was rejected on the y axis and the true value of β1 on the x axis. Is the sample average of β^1 across tests for which the null is rejected approximately equal to the true value of β1? Why or why not?
+Make a plot showing the average estimate of β^1 on the y axis and the true value of β1 on the x axis. Make a second plot overlay on the first, showing the average estimate of β^1 only in samples for which the null was rejected on the y axis and the true value of β1 on the x axis.
 ```{r}
-n_list1= n_list%>% 
+All_samples = n_list%>% 
   group_by(beta_n) %>% 
   summarise(mean1 = mean(beta1)) 
 
   
   
-n_list2= n_list%>% 
+Samples_with_null_rejected = n_list%>% 
   filter (p_value < 0.05) %>% 
   group_by(beta_n) %>% 
-  summarise(mean2 = mean(beta1)) %>% 
+  summarise(mean2 = mean(beta1)) 
 
-njoin = inner_join(n_list1,n_list2) %>% 
+njoin = inner_join(All_samples,Samples_with_null_rejected) %>% 
   pivot_longer(
     mean1:mean2,
     names_to = "lists", 
@@ -183,9 +180,12 @@ njoin = inner_join(n_list1,n_list2) %>%
 ggplot(njoin, aes(x = beta_n, y = means, color = lists)) + 
   geom_point() +
   geom_line()+
-  labs(title = "Number of items ordered in each aisle") +
+  labs(title = "Number of items ordered in each aisle",
+        x = "True value of beta1",
+        y = "Average estimate of beta1",
+        caption = "The assocaition bewteen effect size and power") +
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
   
 ```
-They are/arn't the same
+They are not the same. 
 Because...
