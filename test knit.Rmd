@@ -2,12 +2,108 @@
 title: "Untitled"
 author: "Jingyu Fu"
 date: "2019/11/8"
-output: html_document
+output: github_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(rvest)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
+
+# Problem 1
+read in the data
+```{r}
+library(tidyverse)
+
+set.seed(10)
+
+iris_with_missing = iris %>% 
+  map_df(~replace(.x, sample(1:150, 20), NA)) %>%
+  mutate(Species = as.character(Species))
+```
+Writing function 
+```{r}
+
+fill_in_data = function(x) {
+  
+  if (is.numeric(x)) {
+   x = replace_na(x,mean(x,na.rm = TRUE))
+  } else if (is.character(x)) {
+   x = replace_na(x,"virginica")
+  }
+}
+  
+after_data = map_df(iris_with_missing, fill_in_data) 
+```
+# problem 2
+```{r}
+
+df_prob2 = list.files(path = "./Data", pattern = NULL, all.files = FALSE,
+           full.names = FALSE, recursive = FALSE,
+           ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE)
+
+path_filename = str_c("./data/" ,df_prob2)
+path_filename
+
+prob2_data = map(path_filename, read_csv)%>% bind_rows()%>% unnest()
+
+prob2_data
+```
+tidy the data
+```{r}
+prob2_data = prob2_data %>% mutate (
+  id = c("control_1","control_2","control_3","control_4","control_5","control_6","control_7","control_8","control_9","control_10","experimental_1","experimental_2","experimental_3","experimental_4","experimental_5","experimental_6","experimental_7","experimental_8","experimental_9","experimental_10")
+) %>% 
+  select(id, everything()) %>% 
+  separate(id, into = c("Group", "ID")) 
+
+```
+
+make spaghetti plot
+```{r}
+pivot_longer(
+             prob2_data,
+             week_1:week_8 ,
+             names_to = "week", 
+             names_prefix = "week_",
+             values_to = "observation"
+             ) %>% 
+  group_by(Group, ID) %>% 
+  ggplot(aes(x = week, y = observation, group = ID,color = Group)) +
+  geom_path() + 
+  labs(
+    title = "Observation plot",
+    x = "Week",
+    y = "Observations",
+    caption = "Observations on each subject over time"
+    ) + 
+  viridis::scale_color_viridis(
+    discrete = TRUE) 
+```
+Comment:
+Experimental group has larger slope, which means its obervations change faster as time goes by. On the contrary, control group has lower slope and slower change through the weeks. Overall, the observations of experimental group are rising through the time, but there are many observations in control group that are generally decreasing along the time. COmparing between two groups we can find out that experimental group has a increasing trend and faster change in observations.
+
+# problem 3
+Generate 10000 datasets from the model,Repeat the above for β1={1,2,3,4,5,6}
 ```{r}
 sim_regression = function(n = 30, beta0 = 2, beta1 = 0) {
   
@@ -22,10 +118,12 @@ sim_regression = function(n = 30, beta0 = 2, beta1 = 0) {
     beta1 = pull(ls_fit, estimate)[2],
     p_value = pull(ls_fit, p.value)[2]
  )
-  
-  
-  
-  n_list = tibble(
+}
+```
+
+```{r}
+
+n_list = tibble(
   beta_n = c(0,1,2,3,4,5,6)) %>% 
   mutate(
    value = map(.x = beta_n, ~rerun(500, sim_regression( beta1 =.x))))
@@ -34,25 +132,47 @@ sim_regression = function(n = 30, beta0 = 2, beta1 = 0) {
  
 n_list = n_list %>% 
   unnest()
-
-
-
-proportion = n_list %>% 
-  group_by(beta_n) %>% 
-  summarise(
-   proportion = mean( p_value < 0.05 )/n()
-    )
-
-
-
-proportion %>% 
-ggplot(aes(x = beta_n, y = proportion)) + 
-  geom_point() + 
-  geom_line()+
-  labs(title = "Effect size and power plot",
-    x = "Effect size",
-    y = "Power",
-    caption = "The assocaition bewteen effect size and power") +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
 ```
+
+Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of β2 on the x axis. 
+```{r}
+
+```
+Describe the association:
+Power increases as effect size increases. The slope (increasing speed) is highest among effect size 2,3,4,5, and the incrasing speed (slope) slows down a bit when effect size increases from 5 to 6. 
+
+
+
+Make a plot showing the average estimate of β^1 on the y axis and the true value of β1 on the x axis. Make a second plot overlay on the first, showing the average estimate of β^1 only in samples for which the null was rejected on the y axis and the true value of β1 on the x axis.
+```{r}
+all_data = n_list%>% 
+  group_by(beta_n) %>% 
+  summarise(All_samples = mean(beta1)) 
+
+  
+  
+null_r_data = n_list%>% 
+  filter (p_value < 0.05) %>% 
+  group_by(beta_n) %>% 
+  summarise(Samples_with_null_rejected = mean(beta1)) 
+
+njoin = inner_join(all_data,null_r_data) %>% 
+  pivot_longer(
+    All_samples:Samples_with_null_rejected,
+    names_to = "lists", 
+    values_to = "means"  
+  )
+
+
+ggplot(njoin, aes(x = beta_n, y = means, color = lists)) + 
+  geom_point() +
+  geom_line()+
+  labs(title = "Number of items ordered in each aisle",
+        x = "True value of beta1",
+        y = "Average estimate of beta1",
+        caption = "The assocaition bewteen effect size and power") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+  
+```
+They are not the same. Because average estimate of samples whose null are rejected are mostly larger than true value of beta1(except for true value equals 0). This difference  might be cause by the missing of  true value of beta1 whose p_values are larger than 0.05. Those missing  beta 1 may have samller estimates than true value and missing them may coz a increase in estimate of beta1 corresponding to each true value. 
 
